@@ -76,17 +76,23 @@ bool Object::Collide(Ray r, float &t)
     if (type == SPHERE)
     {
         float a = r.direction.dot(r.direction);
-        // float a = pow(r.direction.mag(), 2);
-        //[-0.65, 0.65, -0.40]
-        // 1.005
-        float b = 2 * (r.direction.dot((r.origin - sphere.center)));
-        // -5.1
+        float b = 2 * (r.direction.dot((r.origin-sphere.center)));
         float c = (r.origin-sphere.center).dot(r.origin-sphere.center) - (sphere.radius * sphere.radius);
-        // 61
+
+        // printf("Center: ");
+        // sphere.center.print();
+        // printf ("Radius: %f, OR: ", sphere.radius);
+        // (r.origin-sphere.center).print();
+        // printf("DIR: ");
+        // r.direction.print();
+        // printf("ORI: ");
+        // r.origin.print();
 
         float disc = b*b - (4*a*c);
         // printf("A: %f, B: %f, C: %f\n", a, b, c);
         // printf("Disc: %f\n", disc);
+        // r.direction.print();
+        // r.origin.print();
         if (disc < 0)
         {
             return false;
@@ -95,19 +101,20 @@ bool Object::Collide(Ray r, float &t)
         float disc_sqrt = sqrt(disc);
         float t1 = (-b+disc_sqrt)/(2*a); 
         float t2 = (-b-disc_sqrt)/(2*a);   
-        if(t1==0)
+        if(t2>0)
+        {
+            t = t2;
+            return true;
+        }
+        else if (t1>=0)
         {
             t = t1;
+            return true;
         }
         else
         {
-            if(t2>0)
-            {
-                t = t2;
-            }
+            return false;
         }
-
-        return true;
     }
     else
     {

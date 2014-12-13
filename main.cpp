@@ -9,9 +9,9 @@
 
 // #define PPM6
 
-#define DEBUGMODE
-#define DEBUG_X 614
-#define DEBUG_Y 232
+// #define DEBUGMODE
+#define DEBUG_X 700
+#define DEBUG_Y 100
 
 #define DEPTH = 2
 
@@ -36,6 +36,27 @@ Vec3* colorPoints;
 
 char _filename[70];
 std::ofstream ofs;
+
+float myClamp(float n, float lower, float upper) {
+  return std::max(lower, std::min(n, upper));
+}
+
+void WritePpm(Vec3 vec)
+{
+    int a = myClamp(vec[0], 0, 1)*255;
+    int b = myClamp(vec[1], 0, 1)*255;
+    int c = myClamp(vec[2], 0, 1)*255;
+
+#ifdef PPM6
+    ofs << (unsigned char)a << (unsigned char)b << (unsigned char)c;
+#else
+    ofs << a << " " << b << " " << c << " " << "\n";
+#endif
+
+    // printf("%c %c %c", (unsigned char)(vec[0]*255), (unsigned char)(vec[1]*255), (unsigned char)(vec[2]*255));
+    // printf("%c %c %c\n", (int)(vec[0]*255), (int)(vec[1]*255), (int)(vec[2]*255));
+    // printf("%d %d %d\n", a, b, c);
+}
 
 Vec3 Sample(Ray ray, int depth)
 {
@@ -74,13 +95,16 @@ Vec3 Sample(Ray ray, int depth)
             // Start at 1 to skip ambient light
             for (int j = 1; j < lightCount; j++)
             {
-                Ray shadowRay = Ray(collide_point, Vec3(lights[j].position - collide_point));
+                Ray shadowRay = Ray(collide_point, (lights[j].position - collide_point).normal());
 
+                int shadedByObject = -1;
                 for (int k = 0; k < objectCount; k++)
                 {
                     if (i == k)
                     {
                         // Don't test with this object
+                        // AND
+                        // Don't test if normal points perpendiular to/away from light
                         continue;
                     }
                     // TODO: Check that object is opaque
@@ -88,21 +112,25 @@ Vec3 Sample(Ray ray, int depth)
                     {
 #ifdef DEBUGMODE
             printf("In shadow from light %d by (%d) object number [%d]\n", j, objects[i].type, k);
-            printf("Collided at: ");
+            printf("T: %f, Collided at: ", t);
             (shadowRay.origin + shadowRay.direction.scale(t)).print();
-            lights[j].position.print();
 #endif
+                        shadedByObject = k;
                         break;
                     }
                     else
                     {
                         float dist = ray.origin.dist(lights[j].position);
                         float distTerm = 1.0f / (float)(lights[j].attenuation[0] + (lights[j].attenuation[1]*dist) + (lights[j].attenuation[2]*pow(dist, 2)));
-                        float lDotN = shadowRay.direction.normal().dot(normal);
+                        float lDotN = shadowRay.direction.dot(normal);
                         Vec3 toView = (cameraPos - collide_point).normal();
-                        Vec3 r_vec = (normal * 2 * lDotN) - shadowRay.direction.normal();
+                        Vec3 r_vec = (normal * 2 * lDotN) - shadowRay.direction;
                         Vec3 difComponent = pigments[colorIdx].GetColor(collide_point) * distTerm * finishes[finishIdx].diffuse * lDotN;
                         Vec3 specComponent = lights[j].intensity * distTerm * finishes[finishIdx].specular * pow(toView.dot(r_vec), finishes[finishIdx].shininess);
+                        if (normal.dot(shadowRay.direction) <= 0)
+                        {
+                            specComponent = Vec3(0, 0, 0);
+                        }
                         Vec3 ambiComponent = lights[0].intensity * finishes[finishIdx].ambiance;
                         phong = phong + difComponent + specComponent + ambiComponent;
 #ifdef DEBUGMODE
@@ -143,26 +171,7 @@ void WritePpm(const char* str)
     ofs.close();
 }
 
-float myClamp(float n, float lower, float upper) {
-  return std::max(lower, std::min(n, upper));
-}
 
-void WritePpm(Vec3 vec)
-{
-    int a = myClamp(vec[0], 0, 1)*255;
-    int b = myClamp(vec[1], 0, 1)*255;
-    int c = myClamp(vec[2], 0, 1)*255;
-
-#ifdef PPM6
-    ofs << (unsigned char)a << (unsigned char)b << (unsigned char)c;
-#else
-    ofs << a << " " << b << " " << c << " " << "\n";
-#endif
-
-    // printf("%c %c %c", (unsigned char)(vec[0]*255), (unsigned char)(vec[1]*255), (unsigned char)(vec[2]*255));
-    // printf("%c %c %c\n", (int)(vec[0]*255), (int)(vec[1]*255), (int)(vec[2]*255));
-    // printf("%d %d %d\n", (int)(vec[0]*255), (int)(vec[1]*255), (int)(vec[2]*255));
-}
 
 int main(int argc, char **argv) {
 
