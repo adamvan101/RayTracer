@@ -13,7 +13,7 @@
 #define DEBUG_X 700
 #define DEBUG_Y 100
 
-#define DEPTH = 2
+#define DEPTH 2
 
 // Some variables we'll read from the input file
 int width;
