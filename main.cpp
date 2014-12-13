@@ -11,8 +11,8 @@
 // #define PPM6
 
 // #define DEBUGMODE
-#define DEBUG_X 700
-#define DEBUG_Y 100
+#define DEBUG_X 136
+#define DEBUG_Y 667
 
 #define DEPTH 10
 
@@ -40,6 +40,10 @@ std::ofstream ofs;
 
 float myClamp(float n, float lower, float upper) {
   return std::max(lower, std::min(n, upper));
+}
+
+Vec3 myClamp(Vec3 v, float lower, float upper) {
+    return Vec3(myClamp(v[0], lower, upper), myClamp(v[1], lower, upper), myClamp(v[2], lower, upper));
 }
 
 void WritePpm(Vec3 vec)
@@ -181,8 +185,17 @@ Vec3 Sample(Ray ray, int depth)
                 phong = phong + Sample(shadowRay, depth+1)*finishes[objects[shadedByObject].finish].reflect;     
             }
         }    
-    
-        return phong
+
+        Vec3 ref_Direction = ray.direction - (normal * 2 * (normal.dot(ray.direction)));
+        Vec3 reflect = Sample(Ray(collide_point, ref_Direction.normal()), depth+1);
+
+#ifdef DEBUGMODE
+        printf("Reflection Direction: ");
+        ref_Direction.print();
+        printf("Reflect Component: ");
+        reflect.print();
+#endif
+        return myClamp(phong, 0, 1) + reflect * finishes[finishIdx].reflect;
     }
 }
 
@@ -305,7 +318,7 @@ int main(int argc, char **argv) {
 
     char buffer[50];
 #ifdef PPM6
-    sprintf(buffer, "P6 %d %d 255 \n", width, height);
+    sprintf(buffer, "P6 %d %d 255 ", width, height);
 #else
     sprintf(buffer, "P3 %d %d 255 \n", width, height);
 #endif // PPM6
