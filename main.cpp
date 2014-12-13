@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <climits>
 
 // #define PPM6
 
@@ -13,7 +14,7 @@
 #define DEBUG_X 700
 #define DEBUG_Y 100
 
-#define DEPTH = 2
+#define DEPTH 10
 
 // Some variables we'll read from the input file
 int width;
@@ -60,7 +61,7 @@ void WritePpm(Vec3 vec)
 
 Vec3 Sample(Ray ray, int depth)
 {
-    if (depth >= 2)
+    if (depth >= DEPTH)
     {
         return Vec3(0, 0, 0);
     }
@@ -98,6 +99,7 @@ Vec3 Sample(Ray ray, int depth)
                 Ray shadowRay = Ray(collide_point, (lights[j].position - collide_point).normal());
 
                 int shadedByObject = -1;
+                int lowestT = INT_MAX;
                 for (int k = 0; k < objectCount; k++)
                 {
                     if (i == k)
@@ -115,52 +117,54 @@ Vec3 Sample(Ray ray, int depth)
             printf("T: %f, Collided at: ", t);
             (shadowRay.origin + shadowRay.direction.scale(t)).print();
 #endif
-                        shadedByObject = k;
-                        break;
-                    }
-                    else
-                    {
-                        float dist = ray.origin.dist(lights[j].position);
-                        float distTerm = 1.0f / (float)(lights[j].attenuation[0] + (lights[j].attenuation[1]*dist) + (lights[j].attenuation[2]*pow(dist, 2)));
-                        float lDotN = shadowRay.direction.dot(normal);
-                        Vec3 toView = (cameraPos - collide_point).normal();
-                        Vec3 r_vec = (normal * 2 * lDotN) - shadowRay.direction;
-                        Vec3 difComponent = pigments[colorIdx].GetColor(collide_point) * distTerm * finishes[finishIdx].diffuse * lDotN;
-                        Vec3 specComponent = lights[j].intensity * distTerm * finishes[finishIdx].specular * pow(toView.dot(r_vec), finishes[finishIdx].shininess);
-                        if (normal.dot(shadowRay.direction) <= 0)
-                        {
-                            specComponent = Vec3(0, 0, 0);
+                        if(t<lowestT){
+                          lowestT = t;
+                          shadedByObject = k;
                         }
-                        Vec3 ambiComponent = lights[0].intensity * finishes[finishIdx].ambiance;
-                        phong = phong + difComponent + specComponent + ambiComponent;
-#ifdef DEBUGMODE
-            printf("Visible by light number [%d], distance: %f, distTerm: %f\n", j, dist, distTerm);
-
-            // More technical - optional output
-            printf("lDotN %f\n", lDotN);
-            toView.print();
-            r_vec.print();
-            printf("The dot: %f\n", toView.dot(r_vec));
-
-            printf("Diffuse Component: ");
-            difComponent.print();
-            printf("Specular Component: ");
-            specComponent.print();
-            printf("Ambient Component: ");
-            ambiComponent.print();
-            printf("Phong So Far: ");
-            phong.print();
-#endif
-                        break;
                     }
                 }
+                 if (shadedByObject == -1) 
+                  {
+                      float dist = ray.origin.dist(lights[j].position);
+                      float distTerm = 1.0f / (float)(lights[j].attenuation[0] + (lights[j].attenuation[1]*dist) + (lights[j].attenuation[2]*pow(dist, 2)));
+                      float lDotN = shadowRay.direction.dot(normal);
+                      Vec3 toView = (cameraPos - collide_point).normal();
+                      Vec3 r_vec = (normal * 2 * lDotN) - shadowRay.direction;
+                      Vec3 difComponent = pigments[colorIdx].GetColor(collide_point) * distTerm * finishes[finishIdx].diffuse * lDotN;
+                      Vec3 specComponent = lights[j].intensity * distTerm * finishes[finishIdx].specular * pow(toView.dot(r_vec), finishes[finishIdx].shininess);
+                      if (normal.dot(shadowRay.direction) <= 0)
+                      {
+                          specComponent = Vec3(0, 0, 0);
+                      }
+                      Vec3 ambiComponent = lights[0].intensity * finishes[finishIdx].ambiance;
+                      phong = phong + difComponent + specComponent + ambiComponent;
+#ifdef DEBUGMODE
+          printf("Visible by light number [%d], distance: %f, distTerm: %f\n", j, dist, distTerm);
+
+          // More technical - optional output
+          printf("lDotN %f\n", lDotN);
+          toView.print();
+          r_vec.print();
+          printf("The dot: %f\n", toView.dot(r_vec));
+
+          printf("Diffuse Component: ");
+          difComponent.print();
+          printf("Specular Component: ");
+          specComponent.print();
+          printf("Ambient Component: ");
+          ambiComponent.print();
+          printf("Phong So Far: ");
+          phong.print();
+#endif
+                  }
+          else{
+              phong = phong + Sample(shadowRay, depth+1)*finishes[objects[shadedByObject].finish].reflect;     
             }
-            
+        }    
             return phong;
             // Vec3 pigments[colorIdx].GetColor(collide_point);
         }
     }
-
     return background_color;
 }
 
