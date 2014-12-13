@@ -101,12 +101,12 @@ bool Object::Collide(Ray r, float &t)
         float disc_sqrt = sqrt(disc);
         float t1 = (-b+disc_sqrt)/(2*a); 
         float t2 = (-b-disc_sqrt)/(2*a);   
-        if(t2>0)
+        if(t2>0.05f)
         {
             t = t2;
             return true;
         }
-        else if (t1>=0)
+        else if (t1>=0.05f)
         {
             t = t1;
             return true;

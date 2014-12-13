@@ -73,99 +73,117 @@ Vec3 Sample(Ray ray, int depth)
     ray.direction.print();
 #endif
 
+    float t = INT_MAX;
+    float lowT;
+    int firstObjectIdx = -1;
     for (int i = 0; i < objectCount; i++)
     {
-        float t;
-        if (objects[i].Collide(ray, t))
+        if (objects[i].Collide(ray, lowT))
         {
-            Vec3 collide_point = ray.origin + ray.direction.scale(t);
-            Vec3 normal = objects[i].normal(collide_point);
-
-#ifdef DEBUGMODE
-            printf("Collision with (%d) object number [%d]\n", objects[i].type, i);
-            printf("Collision point: ");
-            collide_point.print();
-            printf("Collision normal: ");
-            normal.print();
-#endif
-            int colorIdx = objects[i].color;
-            int finishIdx = objects[i].finish;
-
-            Vec3 phong = Vec3(0, 0, 0);//pigments[colorIdx].GetColor(collide_point);
-            
-            // Start at 1 to skip ambient light
-            for (int j = 1; j < lightCount; j++)
+            if (lowT < t)
             {
-                Ray shadowRay = Ray(collide_point, (lights[j].position - collide_point).normal());
-
-                int shadedByObject = -1;
-                int lowestT = INT_MAX;
-                for (int k = 0; k < objectCount; k++)
-                {
-                    if (i == k)
-                    {
-                        // Don't test with this object
-                        // AND
-                        // Don't test if normal points perpendiular to/away from light
-                        continue;
-                    }
-                    // TODO: Check that object is opaque
-                    if (objects[k].Collide(shadowRay, t))
-                    {
-#ifdef DEBUGMODE
-            printf("In shadow from light %d by (%d) object number [%d]\n", j, objects[i].type, k);
-            printf("T: %f, Collided at: ", t);
-            (shadowRay.origin + shadowRay.direction.scale(t)).print();
-#endif
-                        if(t<lowestT){
-                          lowestT = t;
-                          shadedByObject = k;
-                        }
-                    }
-                }
-                 if (shadedByObject == -1) 
-                  {
-                      float dist = ray.origin.dist(lights[j].position);
-                      float distTerm = 1.0f / (float)(lights[j].attenuation[0] + (lights[j].attenuation[1]*dist) + (lights[j].attenuation[2]*pow(dist, 2)));
-                      float lDotN = shadowRay.direction.dot(normal);
-                      Vec3 toView = (cameraPos - collide_point).normal();
-                      Vec3 r_vec = (normal * 2 * lDotN) - shadowRay.direction;
-                      Vec3 difComponent = pigments[colorIdx].GetColor(collide_point) * distTerm * finishes[finishIdx].diffuse * lDotN;
-                      Vec3 specComponent = lights[j].intensity * distTerm * finishes[finishIdx].specular * pow(toView.dot(r_vec), finishes[finishIdx].shininess);
-                      if (normal.dot(shadowRay.direction) <= 0)
-                      {
-                          specComponent = Vec3(0, 0, 0);
-                      }
-                      Vec3 ambiComponent = lights[0].intensity * finishes[finishIdx].ambiance;
-                      phong = phong + difComponent + specComponent + ambiComponent;
-#ifdef DEBUGMODE
-          printf("Visible by light number [%d], distance: %f, distTerm: %f\n", j, dist, distTerm);
-
-          // More technical - optional output
-          printf("lDotN %f\n", lDotN);
-          toView.print();
-          r_vec.print();
-          printf("The dot: %f\n", toView.dot(r_vec));
-
-          printf("Diffuse Component: ");
-          difComponent.print();
-          printf("Specular Component: ");
-          specComponent.print();
-          printf("Ambient Component: ");
-          ambiComponent.print();
-          printf("Phong So Far: ");
-          phong.print();
-#endif
-                  }
-          else{
-              phong = phong + Sample(shadowRay, depth+1)*finishes[objects[shadedByObject].finish].reflect;     
+                t = lowT;
+                firstObjectIdx = i;
             }
-        }    
-            return phong;
-            // Vec3 pigments[colorIdx].GetColor(collide_point);
         }
     }
-    return background_color;
+
+    if (firstObjectIdx == -1)
+    {
+        return background_color;
+    }
+    else
+    {
+        // Calculate color
+
+        Vec3 collide_point = ray.origin + ray.direction.scale(t);
+        Vec3 normal = objects[firstObjectIdx].normal(collide_point);
+
+#ifdef DEBUGMODE
+        printf("Collision with (%d) object number [%d]\n", objects[firstObjectIdx].type, firstObjectIdx);
+        printf("Collision point: ");
+        collide_point.print();
+        printf("Collision normal: ");
+        normal.print();
+#endif
+        int colorIdx = objects[firstObjectIdx].color;
+        int finishIdx = objects[firstObjectIdx].finish;
+
+        Vec3 phong = Vec3(0, 0, 0);//pigments[colorIdx].GetColor(collide_point);
+        
+        // Start at 1 to skip ambient light
+        for (int j = 1; j < lightCount; j++)
+        {
+            Ray shadowRay = Ray(collide_point, (lights[j].position - collide_point).normal());
+
+            int shadedByObject = -1;
+            int lowestT = INT_MAX;
+            for (int k = 0; k < objectCount; k++)
+            {
+                if (firstObjectIdx == k)
+                {
+                    // Don't test with this object
+                    // AND
+                    // Don't test if normal points perpendiular to/away from light
+                    continue;
+                }
+                // TODO: Check that object is opaque
+                if (objects[k].Collide(shadowRay, t))
+                {
+#ifdef DEBUGMODE
+        printf("In shadow from light %d by (%d) object number [%d]\n", j, objects[firstObjectIdx].type, k);
+        printf("T: %f, Collided at: ", t);
+        (shadowRay.origin + shadowRay.direction.scale(t)).print();
+#endif
+                    if(t<lowestT){
+                      lowestT = t;
+                      shadedByObject = k;
+                    }
+                }
+            }
+            if (shadedByObject == -1) 
+            {
+                float dist = ray.origin.dist(lights[j].position);
+                float distTerm = 1.0f / (float)(lights[j].attenuation[0] + (lights[j].attenuation[1]*dist) + (lights[j].attenuation[2]*pow(dist, 2)));
+                float lDotN = shadowRay.direction.dot(normal);
+                Vec3 toView = (cameraPos - collide_point).normal();
+                Vec3 r_vec = (normal * 2 * lDotN) - shadowRay.direction;
+                Vec3 difComponent = pigments[colorIdx].GetColor(collide_point) * distTerm * finishes[finishIdx].diffuse * lDotN;
+                Vec3 specComponent = lights[j].intensity * distTerm * finishes[finishIdx].specular * pow(toView.dot(r_vec), finishes[finishIdx].shininess);
+                if (normal.dot(shadowRay.direction) <= 0)
+                {
+                    specComponent = Vec3(0, 0, 0);
+                }
+
+                Vec3 ambiComponent = lights[0].intensity * finishes[finishIdx].ambiance;
+                phong = phong + difComponent + specComponent + ambiComponent;
+#ifdef DEBUGMODE
+      printf("Visible by light number [%d], distance: %f, distTerm: %f\n", j, dist, distTerm);
+
+      // More technical - optional output
+      printf("lDotN %f\n", lDotN);
+      toView.print();
+      r_vec.print();
+      printf("The dot: %f\n", toView.dot(r_vec));
+
+      printf("Diffuse Component: ");
+      difComponent.print();
+      printf("Specular Component: ");
+      specComponent.print();
+      printf("Ambient Component: ");
+      ambiComponent.print();
+      printf("Phong So Far: ");
+      phong.print();
+#endif
+            }
+            else
+            {
+                phong = phong + Sample(shadowRay, depth+1)*finishes[objects[shadedByObject].finish].reflect;     
+            }
+        }    
+    
+        return phong
+    }
 }
 
 void WritePpm(const char* str)
