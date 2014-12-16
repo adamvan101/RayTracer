@@ -42,6 +42,7 @@ class Vec4{
     //functions
     void print();
     Vec4& operator*=(const Mat4& rhs);
+    float &operator[](int i);
 };
 
 class Mat4 {

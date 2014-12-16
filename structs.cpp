@@ -51,14 +51,14 @@ Vec3 Pigment::GetColor(Vec3 point)
 
 Pigment::Pigment(){}
 
-Finish::Finish(float am, float dif, float spec, float shin, float refl, float trans, float ior){
+Finish::Finish(float am, float dif, float spec, float shin, float refl, float trans, float i){
     ambiance = am;
     diffuse = dif;
     specular = spec;
     shininess = shin;
     reflect = refl;
     transmission = trans;
-    refraction = ior;
+    ior = i;
 }
 
 Finish::Finish(){}
@@ -69,6 +69,38 @@ Sphere::Sphere(Vec3 c, float r)
 {
     center = c;
     radius = r;
+}
+
+Polygon::Polygon(){}
+
+Polygon::Polygon(int n)
+{
+    numFaces = n;
+    numFacesSet = 0;
+    faces = new Vec4[n];
+}
+
+void Polygon::AddFace(Vec4 v)
+{
+    faces[numFacesSet] = v;
+    numFacesSet++;
+}
+
+Mesh::Mesh(){}
+
+bool satisfies(Vec4 plane, Vec3 point, bool ineq){
+    //plane: Ax+By+Cz+D>=0
+    // float t;
+    if (ineq)
+    {
+        return plane[0]*point[0]+plane[1]*point[1]+plane[2]*point[2]+plane[3] >= -0.05f;
+        // printf("T: %f\n",t);
+        // return t >= -0.05f;
+    }
+
+    return fabs(plane[0]*point[0]+plane[1]*point[1]+plane[2]*point[2]+plane[3]) < 0.05f;
+    // printf("T: %f\n",t);
+    // return t < 0.05f;
 }
 
 bool Object::Collide(Ray r, float &t)
@@ -116,6 +148,49 @@ bool Object::Collide(Ray r, float &t)
             return false;
         }
     }
+    else if (type == POLY)
+    {
+        t = INT_MAX;
+        int i;
+        Vec3 n,p0,p;
+        float rdn, t2;
+        for(i=0;i<poly.numFaces;i++){
+            n = Vec3(poly.faces[i][0],poly.faces[i][1],poly.faces[i][2]);
+            rdn = r.direction.dot(n);
+            if (rdn != 0){
+                // poly.faces[i].print();
+                if (poly.faces[i][2] != 0)
+                    p0 = Vec3(0,0,-poly.faces[i][3]/poly.faces[i][2]);
+                else if (poly.faces[i][1] != 0)
+                    p0 = Vec3(0,-poly.faces[i][3]/poly.faces[i][1],0);
+                else
+                    p0 = Vec3(-poly.faces[i][3]/poly.faces[i][0],0,0);
+                t2 = (p0-r.origin).dot(n)/(rdn);
+                // n.print();
+                // p0.print();
+                // r.origin.print();
+                // printf("T2: %f, rdn: %f\n", t2, rdn);
+            }
+            if (t2 < t && t2>0){
+                bool inside = true;
+                for(int j=0;j<poly.numFaces;j++){
+                    p = r.direction*t2+r.origin;
+                    // p.print();
+                    if (!satisfies(poly.faces[j],p,true)){
+                        inside = false;
+                    }
+                }
+                if (inside){
+                    t = t2;
+                }
+            }
+        }
+        if (t < INT_MAX){
+            // printf("COLLIDE\n");
+            return true;
+        }
+        return false;
+    }
     else
     {
         return false;
@@ -128,9 +203,19 @@ Vec3 Object::normal(Vec3 point)
     {
         return (point - sphere.center).normal();
     }
+    else if (type == POLY)
+    {
+        for(int i=0;i<poly.numFaces;i++){
+            if(satisfies(poly.faces[i],point,false)){
+                return Vec3(poly.faces[i][0],poly.faces[i][1],poly.faces[i][2]);
+            }
+        }
+
+        return Vec3(1, 1, 1).normal();
+    }
     else
     {
-        return Vec3(1, 1, 1);
+        return Vec3(1, 1, 1).normal();
     }
 }
 
@@ -140,6 +225,14 @@ Object::Object(Sphere s, int col, int f, int n){
     finish = f;
     numTrans = n;
     type = SPHERE;
+}
+
+Object::Object(Polygon p, int col, int f, int n){
+    poly = p;
+    color = col;
+    finish = f;
+    numTrans = n;
+    type = POLY;
 }
 
 Object::Object(){}

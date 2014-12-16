@@ -117,6 +117,13 @@ Vec4& Vec4::operator*=(const Mat4& rhs){
   return *this;
 }
 
+float &Vec4::operator[](int i)
+{
+    if (i < 4)
+      return v[i];
+    return v[0];
+}
+
 Mat4::Mat4(){
   int i;
   for (i=0;i<16;i++){

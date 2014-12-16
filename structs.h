@@ -1,9 +1,13 @@
 #include "transformations.h"
+#include <climits>
+
 
 #define SOLID 1
 #define CHECKERED 2
 
 #define SPHERE 1
+#define POLY 2
+#define MESH 3
 // class Mesh{
 //   public:
 //     Mesh();
@@ -35,11 +39,31 @@ class Sphere{
     float radius;
 };
 
+class Polygon{
+public: 
+    Polygon();
+    Polygon(int n);
+    void AddFace(Vec4 v);
+    int numFaces;
+    int numFacesSet;
+    Vec4 *faces;
+};
+
+class Mesh{
+public:
+    Mesh();
+    Mesh(char * f);
+    char * filename;
+};
+
 class Object{
 public:
     Object();
     Object(Sphere s, int col, int f, int n);
+    Object(Polygon p, int col, int f, int n);
     Sphere sphere;
+    Polygon poly;
+    Mesh mesh;
     int color;
     int finish;
     int numTrans;
@@ -51,14 +75,14 @@ public:
 class Finish{
 public:
     Finish();
-    Finish(float am, float dif, float spec, float shin, float refl, float trans, float ior);
+    Finish(float am, float dif, float spec, float shin, float refl, float trans, float i);
     float ambiance;
     float diffuse;
     float specular;
     float shininess;
     float reflect;
     float transmission;
-    float refraction;
+    float ior;
 };
 
 class Pigment{

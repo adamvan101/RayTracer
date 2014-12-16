@@ -6,15 +6,16 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <climits>
 
 // #define PPM6
 
 // #define DEBUGMODE
-#define DEBUG_X 136
-#define DEBUG_Y 667
+#define DEBUG_X 300
+#define DEBUG_Y 800
 
-#define DEPTH 10
+#define DEPTH 5
+float AA = 1.0f;
+float AA_DEL = 0.5f;
 
 // Some variables we'll read from the input file
 int width;
@@ -65,17 +66,19 @@ void WritePpm(Vec3 vec)
 
 Vec3 Sample(Ray ray, int depth)
 {
-    if (depth >= DEPTH)
-    {
-        return Vec3(0, 0, 0);
-    }
 
 #ifdef DEBUGMODE
+    printf("Depth: %d\n", depth);
     printf("Ray Origin (world): ");
     ray.origin.print();
     printf("Ray Dir (world): ");
     ray.direction.print();
 #endif
+
+    if (depth >= DEPTH)
+    {
+        return Vec3(0, 0, 0);
+    }
 
     float t = INT_MAX;
     float lowT;
@@ -163,12 +166,14 @@ Vec3 Sample(Ray ray, int depth)
                 phong = phong + difComponent + specComponent + ambiComponent;
 #ifdef DEBUGMODE
       printf("Visible by light number [%d], distance: %f, distTerm: %f\n", j, dist, distTerm);
+      printf("Light intensity: ");
+      lights[j].intensity.print();
 
       // More technical - optional output
-      printf("lDotN %f\n", lDotN);
-      toView.print();
-      r_vec.print();
-      printf("The dot: %f\n", toView.dot(r_vec));
+      // printf("lDotN %f\n", lDotN);
+      // toView.print();
+      // r_vec.print();
+      // printf("The dot: %f\n", toView.dot(r_vec));
 
       printf("Diffuse Component: ");
       difComponent.print();
@@ -186,16 +191,64 @@ Vec3 Sample(Ray ray, int depth)
             }
         }    
 
-        Vec3 ref_Direction = ray.direction - (normal * 2 * (normal.dot(ray.direction)));
+        float NdotV = -normal.dot(ray.direction);
+        Vec3 ref_Direction = ray.direction + (normal * 2 * NdotV);
         Vec3 reflect = Sample(Ray(collide_point, ref_Direction.normal()), depth+1);
 
 #ifdef DEBUGMODE
         printf("Reflection Direction: ");
-        ref_Direction.print();
+        ref_Direction.normal().print();
         printf("Reflect Component: ");
         reflect.print();
 #endif
-        return myClamp(phong, 0, 1) + reflect * finishes[finishIdx].reflect;
+
+        // Entering object
+        float ior = finishes[finishIdx].ior;  
+        float cos_theta_1 = -normal.dot(ray.direction);
+        float sin_theta_1 = sqrt(1 - pow(cos_theta_1, 2));
+        // bool enter = true;
+
+        if (cos_theta_1 <= 0)
+        {
+            // Leaving object
+            ior = 1/ior;
+            normal = normal * -1;
+            cos_theta_1 *= -1;
+            // enter = false;
+            // printf("LEAVING!\n");
+        }
+
+        // float c2 = sqrt(1-pow(ior, 2) * (1 - pow(NdotV, 2)));
+        // Vec3 refract_Dir = (ray.direction * ior) + normal * (ior * NdotV - c2);
+
+        float sin_theta_2_sq = pow(sin_theta_1/ior, 2);
+        Vec3 refract_Dir = ray.direction*(1/ior) + normal * ((1/ior)*cos_theta_1 - sqrt(1 - sin_theta_2_sq));
+
+#ifdef DEBUGMODE
+        if (finishes[finishIdx].transmission > 0)
+        {
+            printf("Depth: %d\n", depth);
+            printf("refract_Dir Direction: ");
+            refract_Dir.normal().print();
+            printf("IOR: %f\n", ior);
+        }
+#endif
+
+        Vec3 refraction = Vec3(0, 0, 0);
+        if (sin_theta_2_sq < 1)
+        {
+            refraction = Sample(Ray(collide_point, refract_Dir.normal()), depth+1);   
+        }
+
+#ifdef DEBUGMODE
+        if (finishes[finishIdx].transmission > 0)
+        {
+            printf("Refraction Component: ");
+            refraction.print();
+        }
+#endif
+
+        return myClamp(phong, 0, 1) * (1 - finishes[finishIdx].transmission) + reflect * finishes[finishIdx].reflect + refraction * finishes[finishIdx].transmission;
     }
 }
 
@@ -309,6 +362,22 @@ int main(int argc, char **argv) {
             sscanf( head, "%f %f %f %[^ ] %f %f %f %f", &x, &y, &z, type, &x2, &y2, &z2, &x3);
             objects[i] = Object(Sphere(Vec3(x2,y2,z2), x3), x, y, z);
         }
+        else if (strstr(head, "polyhedron") != NULL) 
+        {
+            sscanf( head, "%f %f %f %[^ ] %f", &x, &y, &z, type, &x2);
+            objects[i] = Object(Polygon(x2), x, y, z);
+
+            for (int j = 0; j < x2; j++)
+            {
+                fgets(head, 70, fp);
+                sscanf( head, "%f %f %f %f", &x, &y, &z, &x3);
+                objects[i].poly.AddFace(Vec4(x, y, z, x3));
+            }
+        }
+        else
+        {
+            fgets(head, 70, fp);
+        }
     }
 
     fclose( fp );
@@ -356,18 +425,33 @@ int main(int argc, char **argv) {
     //1000.000000, 1000.000000, 3.239550, 3.239550
     ofs.open(_filename, std::ofstream::out | std::ofstream::app);
 
+    float del_x = AA_DEL * w/nCols;
+    float del_y = AA_DEL * h/nRows;
+
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)   
         {
-            float p_x = w*((float)j/nCols) - (w/2);
-            float p_y = -h*((float)i/nRows) + (h/2);
-            // printf("%f, %f\n", p_x, p_y);
-            //P(i, j) = E + ( px)C.x + ( py)C.y + (−1)C.z
+            Vec3 color_AA = Vec3(0, 0, 0);
 
-            Vec3 at = cam.origin + cam.x.scale(p_x) + cam.y.scale(p_y) + cam.z.scale(-1);
+            for (int ii = 0; ii < AA; ii++)
+            {
+                for (int jj = 0; jj < AA; jj++)   
+                {
+                    float p_x = w*((float)j/nCols) - (w/2);
+                    float p_y = -h*((float)i/nRows) + (h/2);
+                    // printf("px %f, py %f, ii %d, jj %d\n",p_x, p_y, ii, jj);
+                    p_x += (jj*2*del_x)/(float)AA-del_x;
+                    p_y += (ii*2*del_y)/(float)AA-del_y;
+                    // printf("px %f, py %f, %f, %f, %f\n",p_x, p_y, AA, del_x, del_y);
 
-            colorPoints[i*height + j] = Sample(Ray(cam.origin, (at - cam.origin).normal()), 1);
+                    Vec3 at = cam.origin + cam.x.scale(p_x) + cam.y.scale(p_y) + cam.z.scale(-1);
+
+                    color_AA = color_AA + Sample(Ray(cam.origin, (at - cam.origin).normal()), 1) * (1/(float)(AA*AA));
+                }
+            }
+
+            colorPoints[i*height + j] = color_AA;
             WritePpm(colorPoints[i*height + j]);
         }
     }
