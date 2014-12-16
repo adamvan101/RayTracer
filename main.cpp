@@ -10,12 +10,14 @@
 // #define PPM6
 
 // #define DEBUGMODE
-#define DEBUG_X 300
-#define DEBUG_Y 800
+#define DEBUG_X 659
+#define DEBUG_Y 815
 
+// #region Some parameters we might want to change
 #define DEPTH 5
-float AA = 1.0f;
+float AA = 3.0f;
 float AA_DEL = 0.5f;
+// #endregion
 
 // Some variables we'll read from the input file
 int width;
@@ -122,6 +124,7 @@ Vec3 Sample(Ray ray, int depth)
         for (int j = 1; j < lightCount; j++)
         {
             Ray shadowRay = Ray(collide_point, (lights[j].position - collide_point).normal());
+            float disToLight = collide_point.dist(lights[j].position);
 
             int shadedByObject = -1;
             int lowestT = INT_MAX;
@@ -135,16 +138,22 @@ Vec3 Sample(Ray ray, int depth)
                     continue;
                 }
                 // TODO: Check that object is opaque
+                
                 if (objects[k].Collide(shadowRay, t))
                 {
+                    Vec3 shadow_collide_point = shadowRay.origin + shadowRay.direction * t;
+                    if (disToLight > collide_point.dist(shadow_collide_point))
+                    {
+                        
 #ifdef DEBUGMODE
         printf("In shadow from light %d by (%d) object number [%d]\n", j, objects[firstObjectIdx].type, k);
         printf("T: %f, Collided at: ", t);
         (shadowRay.origin + shadowRay.direction.scale(t)).print();
 #endif
-                    if(t<lowestT){
-                      lowestT = t;
-                      shadedByObject = k;
+                        if(t<lowestT){
+                          lowestT = t;
+                          shadedByObject = k;
+                        }
                     }
                 }
             }
@@ -161,13 +170,22 @@ Vec3 Sample(Ray ray, int depth)
                 {
                     specComponent = Vec3(0, 0, 0);
                 }
+                else
+                {
+                    difComponent[0] *= lights[j].intensity[0];
+                    difComponent[1] *= lights[j].intensity[1];
+                    difComponent[2] *= lights[j].intensity[2];
+                }
 
                 Vec3 ambiComponent = lights[0].intensity * finishes[finishIdx].ambiance;
                 phong = phong + difComponent + specComponent + ambiComponent;
 #ifdef DEBUGMODE
+      printf("Spec: %f, tdr: %f, shine: %f\n", finishes[finishIdx].specular, toView.dot(r_vec), finishes[finishIdx].shininess);
       printf("Visible by light number [%d], distance: %f, distTerm: %f\n", j, dist, distTerm);
       printf("Light intensity: ");
       lights[j].intensity.print();
+      printf("Light attenuation: ");
+      lights[j].attenuation.print();
 
       // More technical - optional output
       // printf("lDotN %f\n", lDotN);
@@ -191,9 +209,12 @@ Vec3 Sample(Ray ray, int depth)
             }
         }    
 
-        float NdotV = -normal.dot(ray.direction);
-        Vec3 ref_Direction = ray.direction + (normal * 2 * NdotV);
-        Vec3 reflect = Sample(Ray(collide_point, ref_Direction.normal()), depth+1);
+        Vec3 reflect = Vec3(0, 0, 0);
+        if (finishes[finishIdx].reflect != 0)
+        {
+            float NdotV = -normal.dot(ray.direction);
+            Vec3 ref_Direction = ray.direction + (normal * 2 * NdotV);
+            reflect = Sample(Ray(collide_point, ref_Direction.normal()), depth+1);
 
 #ifdef DEBUGMODE
         printf("Reflection Direction: ");
@@ -201,6 +222,7 @@ Vec3 Sample(Ray ray, int depth)
         printf("Reflect Component: ");
         reflect.print();
 #endif
+        }
 
         // Entering object
         float ior = finishes[finishIdx].ior;  
@@ -235,7 +257,7 @@ Vec3 Sample(Ray ray, int depth)
 #endif
 
         Vec3 refraction = Vec3(0, 0, 0);
-        if (sin_theta_2_sq < 1)
+        if (sin_theta_2_sq < 1 && finishes[finishIdx].transmission != 0)
         {
             refraction = Sample(Ray(collide_point, refract_Dir.normal()), depth+1);   
         }
@@ -259,9 +281,13 @@ void WritePpm(const char* str)
     ofs.close();
 }
 
-
-
 int main(int argc, char **argv) {
+
+    time_t startTime = time(0);
+    if (AA == 1)
+    {
+        AA_DEL = 0;
+    }
 
     // We need an input filename
     if (argc < 2) { return 0; }
@@ -417,7 +443,9 @@ int main(int argc, char **argv) {
     printf("At (world): ");
     at.print();
 
-    colorPoints[i*height + j] = Sample(Ray(cam.origin, (at - cam.origin).normal()), 1);
+    Vec3 color = Sample(Ray(cam.origin, (at - cam.origin).normal()), 1);
+    printf("Color: ");
+    color.print();
 
 #else
 
@@ -460,5 +488,6 @@ int main(int argc, char **argv) {
 
 #endif // DEBUGMODE
 
+    printf("Total time: %lds\n", time(0) - startTime);
     return 0;
 }

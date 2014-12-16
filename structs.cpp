@@ -38,12 +38,17 @@ Vec3 Pigment::GetColor(Vec3 point)
         return color;
     else
     {
+        // point.print();
         if ((int)(floor(point[0] / scale) + floor(point[1] / scale) + floor(point[2] / scale))%2 == 0)
         {
+            // printf("COlor1\n");
+            // color.print();
             return color;
         }
         else
         {
+            // printf("COlor2\n");
+            // color2.print();
             return color2;
         }
     }
