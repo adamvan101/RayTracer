@@ -41,6 +41,11 @@ Vec3* colorPoints;
 char _filename[70];
 std::ofstream ofs;
 
+int randSymRange(int m)
+{
+    return (rand() % (m*2) - m);
+}
+
 float myClamp(float n, float lower, float upper) {
   return std::max(lower, std::min(n, upper));
 }
@@ -281,7 +286,17 @@ void WritePpm(const char* str)
     ofs.close();
 }
 
+void getNextLine(FILE* fp, char* hold, int len) {
+    fgets(hold, len, fp);
+    while (hold[0] == '#') {
+        printf("Commented line: %s\n", hold);
+        fgets(hold, len, fp);
+    }
+}
+
 int main(int argc, char **argv) {
+
+    srand (time(NULL));
 
     time_t startTime = time(0);
     if (AA == 1)
@@ -304,52 +319,66 @@ int main(int argc, char **argv) {
     float x,y,z,x2,y2,z2,x3,y3,z3;
  
     // Get filename line
-    fgets(_filename, 70, fp);
+    getNextLine(fp, _filename, 70);
+
+    strcpy(_filename, filename);
+    strcat(_filename, ".ppm");
+
+    printf("Output filename: %s\n", _filename);
+
     size_t ln = strlen(_filename) - 1;
     if (_filename[ln] == '\n')
     {
         _filename[ln] = '\0';
     }
-    // sscanf(head, "%[^ ] ", _filename);
     // height, width
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%d %d", &width, &height);
     // camera pos
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%f %f %f", &x, &y, &z);
     cameraPos = Vec3(x, y, z);
     // camera at
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%f %f %f", &x, &y, &z);
     cameraAt = Vec3(x, y, z);
     // camera up
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%f %f %f", &x, &y, &z);
     cameraUp = Vec3(x, y, z);
     // fovy
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%f", &fovy);
 
     int count;
     char type[20];
     // Lights
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%d", &lightCount);
     lights = new Light[lightCount];
     for (int i = 0; i < lightCount; i++)
     {
-        fgets(head, 70, fp);
+        getNextLine(fp, head, 70);
         sscanf( head, "%f %f %f %f %f %f %f %f %f", &x, &y, &z, &x2, &y2, &z2, &x3, &y3, &z3);
         lights[i] = Light(Vec3(x,y,z), Vec3(x2,y2,z2), Vec3(x3,y3,z3));
     }
     // Pigments
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%d", &count);
     pigments = new Pigment[count];
     for (int i = 0; i < count; i++)
     {
-        fgets(head, 70, fp);
+        getNextLine(fp, head, 70);
         sscanf( head, "%[^ ] %f %f %f %f %f %f %f", type, &x, &y, &z, &x2, &y2, &z2, &x3);
+
+        printf("Colors Before: %f, %f, %f, %f, %f, %f\n", x, y, z, x2, y2, z2);
+
+        // Normalize 255 color space
+        if (x > 1) { x /= 255; } if (y > 1) { y /= 255; } if (z > 1) { z /= 255; }
+        if (x2 > 1) { x2 /= 255; } if (y2 > 1) { y2 /= 255; } if (z2 > 1) { z2 /= 255; }
+
+        printf("Colors After: %f, %f, %f, %f, %f, %f\n", x, y, z, x2, y2, z2);
+
         if (strcmp(type, "solid") == 0)
         {
             pigments[i] = Pigment(SOLID, Vec3(x,y,z), Vec3(x,y,z), 1);
@@ -360,32 +389,47 @@ int main(int argc, char **argv) {
         }
     }
     // Finishes
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%d", &count);
     finishes = new Finish[count];
     for (int i = 0; i < count; i++)
     {
-        fgets(head, 70, fp);
+        getNextLine(fp, head, 70);
         sscanf( head, "%f %f %f %f %f %f %f", &x, &y, &z, &x2, &y2, &z2, &x3);
         finishes[i] = Finish(x, y, z, x2, y2, z2, x3);
     }
     // Transformations
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%d", &count);
     for (int i = 0; i < count; i++)
     {
-        fgets(head, 70, fp);
+        getNextLine(fp, head, 70);
     }
     // Objects
-    fgets(head, 70, fp);
+    getNextLine(fp, head, 70);
     sscanf( head, "%d", &objectCount);
     objects = new Object[objectCount];
     for (int i = 0; i < objectCount; i++)
     {
-        fgets(head, 70, fp);
+        getNextLine(fp, head, 70);
         if (strstr(head, "sphere") != NULL)
         {
             sscanf( head, "%f %f %f %[^ ] %f %f %f %f", &x, &y, &z, type, &x2, &y2, &z2, &x3);
+
+            // For now, use 0.01 as our flag for "random"
+            if (x2 == 0.01f ) {
+                x2 = randSymRange(100);
+                printf("Random x: %f\n", x2);
+            }
+            if (y2 == 0.01f ) {
+                y2 = randSymRange(40);
+                printf("Random y: %f\n", y2);
+            }
+            if (z2 == 0.01f ) {
+                z2 = randSymRange(100);
+                printf("Random z: %f\n", z2);
+            }
+            
             objects[i] = Object(Sphere(Vec3(x2,y2,z2), x3), x, y, z);
         }
         else if (strstr(head, "polyhedron") != NULL) 
@@ -395,14 +439,14 @@ int main(int argc, char **argv) {
 
             for (int j = 0; j < x2; j++)
             {
-                fgets(head, 70, fp);
+                getNextLine(fp, head, 70);
                 sscanf( head, "%f %f %f %f", &x, &y, &z, &x3);
                 objects[i].poly.AddFace(Vec4(x, y, z, x3));
             }
         }
         else
         {
-            fgets(head, 70, fp);
+            getNextLine(fp, head, 70);
         }
     }
 
@@ -451,10 +495,11 @@ int main(int argc, char **argv) {
 
     // printf("%f, %f, %f, %f\n", nCols, nRows, h, w);
     //1000.000000, 1000.000000, 3.239550, 3.239550
-    ofs.open(_filename, std::ofstream::out | std::ofstream::app);
 
     float del_x = AA_DEL * w/nCols;
     float del_y = AA_DEL * h/nRows;
+
+    ofs.open(_filename, std::ofstream::out | std::ofstream::app);
 
     for (int i = 0; i < height; i++)
     {
