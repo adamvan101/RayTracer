@@ -371,13 +371,9 @@ int main(int argc, char **argv) {
         getNextLine(fp, head, 70);
         sscanf( head, "%[^ ] %f %f %f %f %f %f %f", type, &x, &y, &z, &x2, &y2, &z2, &x3);
 
-        printf("Colors Before: %f, %f, %f, %f, %f, %f\n", x, y, z, x2, y2, z2);
-
         // Normalize 255 color space
         if (x > 1) { x /= 255; } if (y > 1) { y /= 255; } if (z > 1) { z /= 255; }
         if (x2 > 1) { x2 /= 255; } if (y2 > 1) { y2 /= 255; } if (z2 > 1) { z2 /= 255; }
-
-        printf("Colors After: %f, %f, %f, %f, %f, %f\n", x, y, z, x2, y2, z2);
 
         if (strcmp(type, "solid") == 0)
         {
@@ -500,6 +496,14 @@ int main(int argc, char **argv) {
     float del_y = AA_DEL * h/nRows;
 
     ofs.open(_filename, std::ofstream::out | std::ofstream::app);
+    int pixelCnt = 0;
+    float reportStep = 5;
+    float progressReport = reportStep;
+    float totalPixels = (float)height * width / 100.0f;
+
+    float p_x, p_y;
+    float progress;
+    Vec3 at;
 
     for (int i = 0; i < height; i++)
     {
@@ -511,14 +515,14 @@ int main(int argc, char **argv) {
             {
                 for (int jj = 0; jj < AA; jj++)   
                 {
-                    float p_x = w*((float)j/nCols) - (w/2);
-                    float p_y = -h*((float)i/nRows) + (h/2);
+                    p_x = w*((float)j/nCols) - (w/2);
+                    p_y = -h*((float)i/nRows) + (h/2);
                     // printf("px %f, py %f, ii %d, jj %d\n",p_x, p_y, ii, jj);
                     p_x += (jj*2*del_x)/(float)AA-del_x;
                     p_y += (ii*2*del_y)/(float)AA-del_y;
                     // printf("px %f, py %f, %f, %f, %f\n",p_x, p_y, AA, del_x, del_y);
 
-                    Vec3 at = cam.origin + cam.x.scale(p_x) + cam.y.scale(p_y) + cam.z.scale(-1);
+                    at = cam.origin + cam.x.scale(p_x) + cam.y.scale(p_y) + cam.z.scale(-1);
 
                     color_AA = color_AA + Sample(Ray(cam.origin, (at - cam.origin).normal()), 1) * (1/(float)(AA*AA));
                 }
@@ -526,6 +530,15 @@ int main(int argc, char **argv) {
 
             colorPoints[i*height + j] = color_AA;
             WritePpm(colorPoints[i*height + j]);
+
+            progress = pixelCnt++ / totalPixels;
+
+            // printf("%f, %f, %f, %d\n", progress, progressReport, totalPixels, pixelCnt);
+
+            if (progress > progressReport) {
+                printf("Progress: %d%%\n", (int)progress);
+                progressReport += reportStep;
+            }
         }
     }
 
